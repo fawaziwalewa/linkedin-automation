@@ -10,3 +10,4 @@ Artisan::command('inspire', function () {
 
 Schedule::command('topics:generate-content')->everyMinute();
 Schedule::command('posts:humanize-post-content')->everyMinute();
+Schedule::command('posts:publish-to-linkedin')->daily();
