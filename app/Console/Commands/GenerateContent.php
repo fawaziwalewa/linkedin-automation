@@ -89,6 +89,7 @@ class GenerateContent extends Command
             ]);
 
             if (!$msgRes->successful()) {
+                \Log::error("Failed to add message to thread: " . $msgRes->body());
                 return null;
             }
 
