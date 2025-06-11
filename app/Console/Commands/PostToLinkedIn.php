@@ -22,8 +22,8 @@ class PostToLinkedIn extends Command
      */
     protected $description = 'Publish posts to LinkedIn';
 
-    protected string $accessToken;
-    protected string $authorUrn;
+    protected ?string $accessToken;
+    protected ?string $authorUrn;
 
     public function __construct()
     {
