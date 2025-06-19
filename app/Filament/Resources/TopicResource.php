@@ -11,6 +11,7 @@ use Filament\Resources\Resource;
 use Filament\Notifications\Notification;
 use App\Console\Commands\GenerateContent;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use App\Filament\Resources\TopicResource\Pages;
 
 class TopicResource extends Resource
@@ -149,6 +150,46 @@ class TopicResource extends Resource
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\BulkAction::make('generatePosts')
+                        ->label('Generate Posts')
+                        ->icon('heroicon-o-plus')
+                        ->requiresConfirmation()
+                        ->action(function (Collection $records) {
+                            foreach ($records as $record) {
+                                $response = (new GenerateContent)->generate($record->topic, $record->preferred_framework);
+                                if($response){
+                                    $content = $response['content'] ?? '';
+                                    $framework = $response['framework'] ?? $record->preferred_framework;
+                                    $post = new \App\Models\Post();
+                                    $post->topic = $record->topic;
+                                    $post->content = $content;
+                                    $post->framework = $framework;
+                                    $post->save();
+                                    $record->status = 'Generated';
+                                    $record->save();
+                                }
+                            }
+                            Notification::make()
+                                ->title('Posts Generated')
+                                ->body('Posts have been generated for the selected topics.')
+                                ->success()
+                                ->send();
+                        }),
+                    Tables\Actions\BulkAction::make('approveTopics')
+                        ->label('Approve Topics')
+                        ->icon('heroicon-o-check')
+                        ->requiresConfirmation()
+                        ->action(function (Collection $records) {
+                            foreach ($records as $record) {
+                                $record->status = 'Approved';
+                                $record->save();
+                            }
+                            Notification::make()
+                                ->title('Topics Approved')
+                                ->body('Selected topics have been approved.')
+                                ->success()
+                                ->send();
+                        }),
                 ]),
             ])->modifyQueryUsing(function (Builder $query) {
                 return $query->latest();

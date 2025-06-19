@@ -13,6 +13,7 @@ use Filament\Resources\Resource;
 use App\Console\Commands\PostToLinkedIn;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use App\Console\Commands\HumanizePostContent;
 use App\Filament\Resources\PostResource\Pages;
 use Webbingbrasil\FilamentCopyActions\Forms\Actions\CopyAction;
@@ -141,13 +142,6 @@ class PostResource extends Resource
                 //
             ])
             ->actions([
-                Tables\Actions\ViewAction::make()
-                    ->label('')
-                    ->tooltip('Preview Post')
-                    ->modalHeading('Post Preview')
-                    ->extraAttributes([
-                        'class' => 'border-2 dark:border-gray-500 rounded px-2 py-1 !gap-0',
-                    ]),
                 Tables\Actions\Action::make('postToLinkedIn')
                     ->label('')
                     ->tooltip('Post to LinkedIn')
@@ -194,10 +188,66 @@ class PostResource extends Resource
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\BulkAction::make('postToLinkedIn')
+                        ->label('Post to LinkedIn')
+                        ->requiresConfirmation()
+                        ->action(function (Collection $records) {
+                            foreach ($records as $record) {
+                                $asset = (new PostToLinkedIn)->uploadImageToLinkedIn($record->image);
+                                $post = (new PostToLinkedIn)->publishToLinkedIn($record->humanized_content, $asset);
+
+                                if ($post) {
+                                    $record->update(['status' => 'Posted']);
+                                    Notification::make()
+                                        ->title('Post published successfully')
+                                        ->success()
+                                        ->send();
+                                } else {
+                                    $record->update(['status' => 'Declined']);
+                                    Notification::make()
+                                        ->title('Failed to publish post')
+                                        ->danger()
+                                        ->send();
+                                }
+                            }
+                        }),
+                    Tables\Actions\BulkAction::make('humanizeContent')
+                        ->label('Humanize Content')
+                        ->requiresConfirmation()
+                        ->action(function (Collection $records) {
+                            foreach ($records as $record) {
+                                if (!$record->content) {
+                                    Notification::make()
+                                        ->title('Content is required')
+                                        ->danger()
+                                        ->send();
+                                    continue;
+                                }
+                                $content = (new HumanizePostContent)->humanizeWithFineTune($record->content);
+                                $record->update([
+                                    'humanized_content' => $content,
+                                    'status' => 'Humanized'
+                                ]);
+                                Notification::make()
+                                    ->title('Content humanized successfully')
+                                    ->success()
+                                    ->send();
+                            }
+                        }),
+                    Tables\Actions\BulkAction::make('approvePosts')
+                        ->label('Approve Posts')
+                        ->requiresConfirmation()
+                        ->action(function (Collection $records) {
+                            foreach ($records as $record) {
+                                $record->update(['status' => 'Approved']);
+                                Notification::make()
+                                    ->title('Posts approved successfully')
+                                    ->success()
+                                    ->send();
+                            }
+                        })
                 ]),
-            ])->modifyQueryUsing(function (Builder $query) {
-                return $query->latest();
-            });
+            ])->modifyQueryUsing(fn(Builder $query) => $query->latest());
     }
 
     public static function getRelations(): array
